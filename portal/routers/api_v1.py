@@ -820,7 +820,6 @@ async def get_booth(
     db: AsyncSession = Depends(get_db_session),
     token: OAuthToken = Depends(require_oauth_scope("booths:read")),
 ):
-    language_code = _validate_lang(language_code)
     result = await db.execute(select(Event).where(Event.slug == event_slug))
     event = result.scalars().first()
     if not event:
@@ -828,6 +827,7 @@ async def get_booth(
 
     room = await _verify_token_rbac(db, token, event, room_id, lock_event=True)
     target_room_id = _extract_room_id(room, room_id)
+    language_code = _validate_lang(language_code)
 
     result = await db.execute(select(DBBooth).where(DBBooth.room_id == target_room_id, DBBooth.language_code == language_code, DBBooth.event_id == event.id))
     booth = result.scalars().first()
@@ -850,7 +850,6 @@ async def create_booth(
     db: AsyncSession = Depends(get_db_session),
     token: OAuthToken = Depends(require_oauth_scope("booths:write")),
 ):
-    language_code = _validate_lang(language_code)
     event = await _get_event_for_request(db, event_slug, write_lock=True)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -859,6 +858,7 @@ async def create_booth(
         db, token, event, room_id, manage=True, lock_event=True, write_lock=True
     )
     target_room_id = _extract_room_id(room, room_id)
+    language_code = _validate_lang(language_code)
 
     result = await db.execute(select(DBBooth).where(DBBooth.room_id == target_room_id, DBBooth.language_code == language_code))
     if result.scalars().first():
@@ -882,7 +882,6 @@ async def delete_booth_endpoint(
     db: AsyncSession = Depends(get_db_session),
     token: OAuthToken = Depends(require_oauth_scope("booths:write")),
 ):
-    language_code = _validate_lang(language_code)
     event = await _get_event_for_request(db, event_slug, write_lock=True)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -891,6 +890,7 @@ async def delete_booth_endpoint(
         db, token, event, room_id, manage=True, lock_event=True, write_lock=True
     )
     target_room_id = _extract_room_id(room, room_id)
+    language_code = _validate_lang(language_code)
 
     result = await db.execute(select(DBBooth).where(DBBooth.room_id == target_room_id, DBBooth.language_code == language_code, DBBooth.event_id == event.id))
     booth = result.scalars().first()
@@ -912,13 +912,13 @@ async def start_transcription(
     db: AsyncSession = Depends(get_db_session),
     token: OAuthToken = Depends(require_oauth_scope("sessions:manage")),
 ):
-    language_code = _validate_lang(language_code)
     event = await _get_event_for_request(db, event_slug, write_lock=True)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
     room = await _verify_token_rbac(db, token, event, room_id, lock_event=True, write_lock=True)
     target_room_id = _extract_room_id(room, room_id)
+    language_code = _validate_lang(language_code)
 
     booth_id = make_booth_id(event_slug, target_room_id, language_code)
 
@@ -940,13 +940,13 @@ async def stop_transcription(
     db: AsyncSession = Depends(get_db_session),
     token: OAuthToken = Depends(require_oauth_scope("sessions:manage")),
 ):
-    language_code = _validate_lang(language_code)
     event = await _get_event_for_request(db, event_slug, write_lock=True)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
     room = await _verify_token_rbac(db, token, event, room_id, lock_event=True, write_lock=True)
     target_room_id = _extract_room_id(room, room_id)
+    language_code = _validate_lang(language_code)
 
     booth_id = make_booth_id(event_slug, target_room_id, language_code)
     await stop_transcription_worker(booth_id)
@@ -1008,7 +1008,6 @@ async def export_transcript(
     token: OAuthToken = Depends(require_oauth_scope("transcripts:read")),
 ):
     """Export source transcript segments or translations for a room booth in chronological order."""
-    language_code = _validate_lang(language_code)
     target_lang = target_lang if isinstance(target_lang, str) else None
 
     result = await db.execute(select(Event).where(Event.slug == event_slug, Event.deleted_at.is_(None)))
@@ -1018,6 +1017,7 @@ async def export_transcript(
 
     room = await _verify_token_rbac(db, token, event, room_id, lock_event=True)
     target_room_id = _extract_room_id(room, room_id)
+    language_code = _validate_lang(language_code)
 
     # Validate that the booth exists within this event/room
     result = await db.execute(

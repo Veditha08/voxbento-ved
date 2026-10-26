@@ -359,3 +359,31 @@ async def test_booth_endpoints_reject_invalid_language_code_with_400():
             res = await req(url, headers=_auth())
             assert res.status_code == 400, f"Expected 400 for {method.upper()} {url}, got {res.status_code}: {res.text}"
             assert "Language code must be exactly two lowercase ASCII letters" in res.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_booth_endpoints_preserve_cross_event_404_with_invalid_language_code():
+    """A token scoped to Event A must receive 404 Event not found for Event B even with invalid language_code."""
+    from portal.database import create_event, create_room, get_session
+
+    await _seed()
+
+    async with get_session() as s:
+        event_b = await create_event(s, slug="othercon", display_name="OtherCon 2026")
+        room_b = await create_room(s, event_id=event_b.id, display_name="Other Hall")
+
+    async with _client() as c:
+        endpoints = [
+            ("get", f"/api/v1/events/{event_b.slug}/rooms/{room_b.id}/booths/invalid_lang"),
+            ("post", f"/api/v1/events/{event_b.slug}/rooms/{room_b.id}/booths/invalid_lang"),
+            ("delete", f"/api/v1/events/{event_b.slug}/rooms/{room_b.id}/booths/invalid_lang"),
+            ("post", f"/api/v1/events/{event_b.slug}/rooms/{room_b.id}/booths/invalid_lang/transcription/start"),
+            ("post", f"/api/v1/events/{event_b.slug}/rooms/{room_b.id}/booths/invalid_lang/transcription/stop"),
+            ("get", f"/api/v1/events/{event_b.slug}/rooms/{room_b.id}/booths/invalid_lang/transcripts/export"),
+        ]
+
+        for method, url in endpoints:
+            req = getattr(c, method)
+            res = await req(url, headers=_auth())
+            assert res.status_code == 404, f"Expected 404 for {method.upper()} {url}, got {res.status_code}: {res.text}"
+            assert res.json()["detail"] == "Event not found"
